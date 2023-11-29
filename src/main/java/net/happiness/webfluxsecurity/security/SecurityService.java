@@ -5,7 +5,7 @@ import io.jsonwebtoken.SignatureAlgorithm;
 import lombok.RequiredArgsConstructor;
 import net.happiness.webfluxsecurity.entity.UserEntity;
 import net.happiness.webfluxsecurity.exception.AuthException;
-import net.happiness.webfluxsecurity.repository.UserRepository;
+import net.happiness.webfluxsecurity.service.UserService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -21,7 +21,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SecurityService {
 
-    private final UserRepository userRepository;
+    private final UserService userService;
     private final PasswordEncoder passwordEncoder;
 
     @Value("${jwt.secret}")
@@ -30,7 +30,6 @@ public class SecurityService {
     private Integer expirationInSeconds;
     @Value("${jwt.issuer}")
     private String issuer;
-
 
     private TokenDetails generateToken(UserEntity user) {
         Map<String, Object> claims = new HashMap<>() {{
@@ -43,7 +42,6 @@ public class SecurityService {
     private TokenDetails generateToken(Map<String, Object> claims, String subject) {
         Long expirationTimeInMillis = expirationInSeconds * 1000L;
         Date expirationDate = new Date(new Date().getTime() + expirationTimeInMillis);
-
         return generateToken(expirationDate, claims, subject);
     }
 
@@ -58,7 +56,6 @@ public class SecurityService {
                 .setExpiration(expirationDate)
                 .signWith(SignatureAlgorithm.HS256, Base64.getEncoder().encodeToString(secret.getBytes()))
                 .compact();
-
         return TokenDetails.builder()
                 .token(token)
                 .issuedAt(createdDate)
@@ -67,16 +64,14 @@ public class SecurityService {
     }
 
     public Mono<TokenDetails> authenticate(String username, String password) {
-        return userRepository.findByUsername(username)
+        return userService.getUserByUsername(username)
                 .flatMap(user -> {
                     if (!user.isEnabled()) {
                         return Mono.error(new AuthException("Account disabled", "USER_ACCOUNT_DISABLED"));
                     }
-
                     if (!passwordEncoder.matches(password, user.getPassword())) {
                         return Mono.error(new AuthException("Invalid password", "INVALID_PASSWORD"));
                     }
-
                     return Mono.just(generateToken(user).toBuilder()
                             .userId(user.getId())
                             .build());
